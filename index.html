@@ -841,13 +841,13 @@ function renderTable() {
   if (!D || !D.n || i1 < i0) { $('#tableTitle').textContent = 'Readings'; return; }
   const span = view.t1 - view.t0, steps = [300, 900, 3600, 10800, 21600, 86400];
   const bucket = Math.max(D.interval, steps.find((s) => span / s <= 150) || 86400);
-  $('#tableTitle').textContent = 'Readings, ' + (bucket >= 86400 ? 'daily' : bucket >= 3600 ? bucket / 3600 + ' h' : bucket / 60 + ' min') + ' averages';
+  $('#tableTitle').textContent = 'Readings, ' + (bucket >= 86400 ? 'daily' : bucket >= 3600 ? bucket / 3600 + ' h' : bucket / 60 + ' min') + ' averages, newest first';
   const head = tbl.createTHead().insertRow();
   ['Time', 'Indoor °C', 'Outdoor °C', 'Humidity %', 'Pressure hPa'].forEach((h) => { const th = document.createElement('th'); th.textContent = h; head.append(th); });
   const body = tbl.createTBody();
   let bi = Math.floor(D.t[i0] / bucket), s = [0, 0, 0, 0], c = [0, 0, 0, 0];
   const flush = () => {
-    const r = body.insertRow(); r.insertCell().textContent = fmtDM(bi * bucket) + ' ' + (bucket < 86400 ? fmtHM(bi * bucket) : '');
+    const r = body.insertRow(0); r.insertCell().textContent = fmtDM(bi * bucket) + ' ' + (bucket < 86400 ? fmtHM(bi * bucket) : '');
     for (let k = 0; k < 4; k++) r.insertCell().textContent = c[k] ? (s[k] / c[k]).toFixed(1) : '–';
     s = [0, 0, 0, 0]; c = [0, 0, 0, 0];
   };
