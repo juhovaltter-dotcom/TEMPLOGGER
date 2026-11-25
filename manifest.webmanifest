@@ -1,6 +1,6 @@
 {
-  "name": "Cottage logger",
-  "short_name": "Cottage",
+  "name": "Petäjoki",
+  "short_name": "Loimaa Logi",
   "description": "Download and chart readings from the cottage temperature logger over Bluetooth",
   "start_url": "./",
   "scope": "./",
