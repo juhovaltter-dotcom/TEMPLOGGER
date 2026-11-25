@@ -11,11 +11,16 @@ self.addEventListener('activate', (e) => {
 });
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
-  // network first (fresh copy when online), cache fallback (works at the cottage)
+  // Network first (fresh copy when online), but never let a bad or slow network break the app:
+  // an error page (e.g. 404 if Pages is switched off), no connection, or a connection that
+  // hangs for over 4 s all fall back to the saved copy.
+  const cached = () => caches.match(e.request).then((m) => m || caches.match('index.html'));
+  const net = fetch(e.request).then((r) => {
+    if (r.ok && new URL(e.request.url).origin === location.origin) { const copy = r.clone(); caches.open(VERSION).then((c) => c.put(e.request, copy)); }
+    return r;
+  });
+  const slow = new Promise((_, no) => setTimeout(() => no(new Error('slow')), 4000));
   e.respondWith(
-    fetch(e.request).then((r) => {
-      if (r.ok && new URL(e.request.url).origin === location.origin) { const copy = r.clone(); caches.open(VERSION).then((c) => c.put(e.request, copy)); }
-      return r;
-    }).catch(() => caches.match(e.request).then((m) => m || caches.match('index.html')))
+    Promise.race([net, slow]).then((r) => (r.ok ? r : cached().then((m) => m || r))).catch(() => cached().then((m) => m || net))
   );
 });
