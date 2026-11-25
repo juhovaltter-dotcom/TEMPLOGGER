@@ -63,7 +63,7 @@ import ds18x20
 from time import ticks_ms, ticks_diff, ticks_add
 
 # ---------------- configuration ----------------
-DEPLOY = False            # True when installed: enables watchdog + auto-restart on crash
+DEPLOY = True             # True when installed: watchdog + auto-restart on crash + 5 s start-up window
 BLE_NAME = "TempLogger"
 PIN_SDA, PIN_SCL, PIN_OW = 8, 9, 13
 DEFAULT_INTERVAL = 300    # seconds between logged samples
@@ -623,6 +623,15 @@ async def main():
 
 
 def run():
+    if DEPLOY:
+        # Start-up window: the LED blinks for 5 s before anything runs. Press Stop / Ctrl+C
+        # in this window to get the board back for editing before the watchdog is armed.
+        from time import sleep_ms
+        _led = Pin("LED", Pin.OUT)
+        for _ in range(10):
+            _led.toggle()
+            sleep_ms(500)
+        _led.off()
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
