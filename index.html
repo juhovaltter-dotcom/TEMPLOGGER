@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0d0d0d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<title>Cottage logger</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11,11,11,.10);
+  --s-in: #2a78d6; --s-out: #eb6834; --s-hum: #1baf7a; --s-pres: #6250d6;
+  --bad: #d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --ring: rgba(255,255,255,.10);
+    --s-in: #3987e5; --s-out: #d95926; --s-hum: #199e70; --s-pres: #9085e9;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+.wrap { max-width: 980px; margin: 0 auto; padding: 14px 14px 40px; }
+h1 { font-size: 20px; margin: 0; font-weight: 650; }
+h2 { font-size: 13px; margin: 0 0 8px; font-weight: 600; color: var(--ink2); }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.sub { color: var(--ink2); font-size: 13px; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: 1px; }
+.dot.on { background: var(--s-hum); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+button, input, select { font: inherit; color: inherit; }
+button {
+  border: 1px solid var(--axis); background: var(--surface); border-radius: 8px;
+  padding: 8px 14px; min-height: 40px; cursor: pointer;
+}
+button:hover:not(:disabled) { background: var(--grid); }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); font-weight: 600; }
+button.primary:hover:not(:disabled) { background: var(--ink); opacity: .88; }
+button.danger { color: var(--bad); border-color: var(--bad); }
+button:focus-visible, input:focus-visible, .charts:focus-visible, summary:focus-visible { outline: 2px solid var(--s-in); outline-offset: 2px; }
+.banner { background: var(--surface); border: 1px solid var(--axis); border-left: 4px solid var(--bad); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 14px; }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+.tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 12px; }
+@media (min-width: 640px) { .tiles { grid-template-columns: repeat(4, 1fr); } }
+.tile { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 12px 14px; }
+.tile .l { color: var(--ink2); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.key { display: inline-block; width: 14px; height: 0; border-top: 2px solid; border-radius: 1px; }
+.tile .v { font-size: 30px; font-weight: 600; line-height: 1.15; margin-top: 2px; }
+.tile .v small { font-size: 14px; font-weight: 500; color: var(--ink2); margin-left: 3px; }
+.tile .u { color: var(--muted); font-size: 12px; min-height: 17px; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.filters .seg { display: inline-flex; border: 1px solid var(--axis); border-radius: 8px; overflow: hidden; }
+.filters .seg button { border: 0; border-radius: 0; background: transparent; min-width: 56px; }
+.filters .seg button + button { border-left: 1px solid var(--axis); }
+.filters button[aria-pressed="true"] { background: var(--grid); font-weight: 650; }
+.filters .seg button[aria-pressed="true"]::before { content: "\2713\00a0"; }
+.filters .spacer { flex: 1; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--ink2); margin-bottom: 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.band-key { display: inline-block; width: 14px; height: 10px; background: var(--muted); opacity: .25; border-radius: 2px; }
+.tri { display: inline-block; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 8px solid var(--muted); }
+.charts { position: relative; touch-action: pan-y; user-select: none; -webkit-user-select: none; transition: opacity .15s; }
+.charts.busy { opacity: .55; }
+.charts .ct { color: var(--ink2); font-size: 13px; font-weight: 600; margin: 10px 0 2px; }
+.charts .ct:first-of-type { margin-top: 0; }
+canvas { display: block; width: 100%; }
+#cTemp { height: 250px; } #cHum { height: 130px; } #cPres { height: 130px; }
+.tip {
+  position: absolute; z-index: 5; pointer-events: none; min-width: 170px;
+  background: var(--surface); border: 1px solid var(--axis); border-radius: 8px; padding: 8px 10px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.18); font-size: 13px;
+}
+.tip .th { color: var(--ink2); margin-bottom: 4px; }
+.tip .r { display: flex; align-items: center; gap: 8px; line-height: 1.6; }
+.tip .r b { font-weight: 650; min-width: 64px; }
+.tip .r em { font-style: normal; color: var(--ink2); }
+.tip .note { color: var(--ink2); font-size: 12px; margin-top: 4px; }
+.hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; margin: 0; }
+dt { color: var(--ink2); } dd { margin: 0; text-align: right; font-weight: 600; }
+.heat-in { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.heat-in label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--ink2); }
+input[type=number], input[type=text] { width: 100px; padding: 8px 10px; border: 1px solid var(--axis); border-radius: 8px; background: var(--page); min-height: 40px; }
+.verdict { font-size: 16px; font-weight: 600; margin: 0 0 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 5px 8px; border-bottom: 1px solid var(--grid); text-align: right; font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--ink2); font-weight: 600; position: sticky; top: 0; background: var(--surface); }
+.tablewrap { max-height: 420px; overflow: auto; }
+details summary { cursor: pointer; font-weight: 600; }
+details .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+details .row label { color: var(--ink2); font-size: 13px; }
+progress { width: 100%; height: 8px; margin-top: 10px; accent-color: var(--s-in); }
+.msg { color: var(--ink2); font-size: 13px; min-height: 20px; margin: 4px 2px; white-space: pre-wrap; }
+.msg.err { color: var(--bad); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Cottage logger</h1>
+      <div class="sub"><span id="dot" class="dot"></span><span id="status">Not connected</span></div>
+    </div>
+    <div class="actions">
+      <button id="btnConnect" class="primary">Connect</button>
+      <button id="btnDisc" hidden>Disconnect</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <section class="tiles" aria-label="Latest readings">
+    <div class="tile"><div class="l"><span class="key" style="border-color:var(--s-in)"></span>Indoor</div><div class="v"><span id="vIn">&ndash;</span><small>&deg;C</small></div><div class="u" id="uIn"></div></div>
+    <div class="tile"><div class="l"><span class="key" style="border-color:var(--s-out)"></span>Outdoor</div><div class="v"><span id="vOut">&ndash;</span><small>&deg;C</small></div><div class="u" id="uOut"></div></div>
+    <div class="tile"><div class="l"><span class="key" style="border-color:var(--s-hum)"></span>Humidity</div><div class="v"><span id="vHum">&ndash;</span><small>%</small></div><div class="u" id="uHum"></div></div>
+    <div class="tile"><div class="l"><span class="key" style="border-color:var(--s-pres)"></span>Pressure</div><div class="v"><span id="vPres">&ndash;</span><small>hPa</small></div><div class="u" id="uPres"></div></div>
+  </section>
+
+  <section class="filters" aria-label="Time range">
+    <div class="seg" role="group" aria-label="Range">
+      <button data-range="86400" aria-pressed="false">24 h</button>
+      <button data-range="604800" aria-pressed="true">7 d</button>
+      <button data-range="2592000" aria-pressed="false">30 d</button>
+      <button data-range="all" aria-pressed="false">All</button>
+    </div>
+    <span class="spacer"></span>
+    <button id="btnTable" aria-pressed="false">Table view</button>
+  </section>
+
+  <section class="card" id="chartCard">
+    <div class="legend" id="legend"></div>
+    <div class="charts" id="charts" tabindex="0" aria-label="Charts. Drag to pan, pinch or scroll to zoom, left and right arrow keys to move the readout.">
+      <div class="ct">Temperature</div>
+      <canvas id="cTemp" role="img" aria-label="Indoor and outdoor temperature over time"></canvas>
+      <div class="ct">Humidity</div>
+      <canvas id="cHum" role="img" aria-label="Indoor relative humidity over time"></canvas>
+      <div class="ct">Air pressure</div>
+      <canvas id="cPres" role="img" aria-label="Air pressure over time"></canvas>
+      <div class="tip" id="tip" hidden></div>
+    </div>
+    <p class="hint">Drag to pan, pinch or scroll to zoom, tap or hover for exact values.</p>
+  </section>
+
+  <section class="card" id="tableCard" hidden>
+    <h2 id="tableTitle">Readings</h2>
+    <div class="tablewrap"><table id="tbl"></table></div>
+  </section>
+
+  <section class="card" id="heat">
+    <h2>Heating check (visible range)</h2>
+    <div class="heat-in">
+      <label>Target temperature (&deg;C)<input id="inSet" type="number" step="0.5" inputmode="decimal"></label>
+      <label>Allowed deviation (&plusmn;&deg;C)<input id="inTol" type="number" step="0.5" min="0" inputmode="decimal"></label>
+    </div>
+    <p class="verdict" id="verdict">No data yet</p>
+    <dl id="stats"></dl>
+  </section>
+
+  <details class="card" id="device">
+    <summary>Device and data</summary>
+    <div class="row">
+      <button id="btnSample">Measure now</button>
+      <label>Log interval (s)</label>
+      <input id="inInt" type="number" min="10" max="3600" step="10" inputmode="numeric">
+      <button id="btnInt">Set</button>
+    </div>
+    <div class="row">
+      <button id="btnCsv">Export CSV</button>
+      <button id="btnDemo">Show demo data</button>
+      <button id="btnClear">Clear data on this phone</button>
+      <button id="btnErase" class="danger">Erase log on the logger</button>
+    </div>
+    <div class="row"><label><input type="checkbox" id="chkAny"> Can't find the logger? List all Bluetooth devices</label></div>
+    <p class="hint" id="devInfo"></p>
+  </details>
+
+  <progress id="prog" hidden max="100" value="0"></progress>
+  <p class="msg" id="msg" role="status"></p>
+</div>
+
+<script>
+'use strict';
+(() => {
+// ====================================================================
+// Constants (must match main.py on the Pico)
+// ====================================================================
+const UUID = {
+  svc:  '7e5a0001-6c0a-4b2e-9a3f-5d1c8b7a2f10',
+  ctrl: '7e5a0002-6c0a-4b2e-9a3f-5d1c8b7a2f10',
+  data: '7e5a0003-6c0a-4b2e-9a3f-5d1c8b7a2f10',
+  live: '7e5a0004-6c0a-4b2e-9a3f-5d1c8b7a2f10',
+};
+const REC = 16, ANC = 10;
+const T_LOG = 1, T_SYNC = 2, T_INFO = 3, T_ACK = 4, T_END = 0xFF;
+const C_SET_TIME = 1, C_READ_LOG = 2, C_READ_SYNC = 3, C_SET_INTERVAL = 4, C_ERASE = 5, C_INFO = 6, C_SAMPLE = 7;
+const T_MISSING = 0x7FFF, U_MISSING = 0xFFFF;
+
+// ====================================================================
+// Small helpers
+// ====================================================================
+const $ = (s) => document.querySelector(s);
+const pad = (n) => String(n).padStart(2, '0');
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+function fmtDM(t) { const d = new Date(t * 1000); return d.getDate() + '.' + (d.getMonth() + 1) + '.'; }
+function fmtHM(t) { const d = new Date(t * 1000); return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+function fmtFull(t) { const d = new Date(t * 1000); return DAYS[d.getDay()] + ' ' + fmtDM(t) + ' ' + fmtHM(t); }
+function fmtDur(s) {
+  s = Math.round(s);
+  if (s < 5400) return Math.max(1, Math.round(s / 60)) + ' min';
+  if (s < 172800) { const h = Math.floor(s / 3600), m = Math.round((s % 3600) / 60); return h + ' h' + (m ? ' ' + m + ' min' : ''); }
+  const d = Math.floor(s / 86400), h = Math.round((s % 86400) / 3600);
+  return d + ' d' + (h ? ' ' + h + ' h' : '');
+}
+function isoLocal(t) { const d = new Date(t * 1000); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()); }
+function isoUtc(t) { return new Date(t * 1000).toISOString().replace('T', ' ').slice(0, 19); }
+const fmt1 = (v) => (v === v && v !== null) ? v.toFixed(1) : '–';
+function lowerBound(a, x, n) { let lo = 0, hi = n === undefined ? a.length : n; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < x) lo = m + 1; else hi = m; } return lo; }
+function upperBound(a, x, n) { let lo = 0, hi = n === undefined ? a.length : n; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] <= x) lo = m + 1; else hi = m; } return lo; }
+function setMsg(text, err) { const m = $('#msg'); m.textContent = text || ''; m.classList.toggle('err', !!err); }
+
+// ====================================================================
+// Binary formats
+// ====================================================================
+const CRC_T = new Uint8Array(256);
+for (let i = 0; i < 256; i++) { let c = i; for (let k = 0; k < 8; k++) c = (c & 0x80) ? ((c << 1) ^ 0x07) & 0xFF : (c << 1) & 0xFF; CRC_T[i] = c; }
+function crc8(u8, off, len) { let c = 0; for (let i = 0; i < len; i++) c = CRC_T[c ^ u8[off + i]]; return c; }
+
+function packRecord(up, boot, tOut, tIn, rh, pres, flags) {
+  const b = new Uint8Array(REC), dv = new DataView(b.buffer);
+  dv.setUint32(0, up, true); dv.setUint16(4, boot, true);
+  dv.setInt16(6, tOut, true); dv.setInt16(8, tIn, true);
+  dv.setUint16(10, rh, true); dv.setUint16(12, pres, true);
+  b[14] = flags; b[15] = crc8(b, 0, 15);
+  return b;
+}
+function parseRecord(u8, off) {
+  const dv = new DataView(u8.buffer, u8.byteOffset + off, REC);
+  const ok = crc8(u8, off, 15) === u8[off + 15] && dv.getUint16(4, true) !== 0;
+  const to = dv.getInt16(6, true), ti = dv.getInt16(8, true), rh = dv.getUint16(10, true), p = dv.getUint16(12, true);
+  return {
+    ok, up: dv.getUint32(0, true), boot: dv.getUint16(4, true),
+    out: to === T_MISSING ? NaN : to / 100, ind: ti === T_MISSING ? NaN : ti / 100,
+    rh: rh === U_MISSING ? NaN : rh / 100, pres: p === U_MISSING ? NaN : p / 10, flags: u8[off + 14],
+  };
+}
+function decodeLog(u8) {
+  const n = Math.floor(u8.length / REC);
+  const d = { n, up: new Uint32Array(n), boot: new Uint16Array(n), out: new Float32Array(n), ind: new Float32Array(n),
+              rh: new Float32Array(n), pres: new Float32Array(n), flags: new Uint8Array(n), ok: new Uint8Array(n), bad: 0 };
+  for (let i = 0; i < n; i++) {
+    const r = parseRecord(u8, i * REC);
+    if (!r.ok) { d.bad++; d.out[i] = d.ind[i] = d.rh[i] = d.pres[i] = NaN; continue; }
+    d.ok[i] = 1; d.up[i] = r.up; d.boot[i] = r.boot; d.out[i] = r.out; d.ind[i] = r.ind;
+    d.rh[i] = r.rh; d.pres[i] = r.pres; d.flags[i] = r.flags;
+  }
+  return d;
+}
+function decodeAnchors(u8) {
+  const m = new Map(), n = Math.floor(u8.length / ANC);
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  for (let i = 0; i < n; i++) {
+    const boot = dv.getUint16(i * ANC, true), up = dv.getUint32(i * ANC + 2, true), unix = dv.getUint32(i * ANC + 6, true);
+    if (!m.has(boot)) m.set(boot, []);
+    m.get(boot).push([up, unix]);
+  }
+  for (const a of m.values()) a.sort((x, y) => x[0] - y[0]);
+  return m;
+}
+// uptime -> real time, per boot session. Same rules as dump_log.py.
+// quality: 1 = between two sync points, 2 = from one sync point, 3 = approximate (boot never synced)
+function resolveTimes(d, anchors) {
+  d.time = new Float64Array(d.n).fill(NaN); d.q = new Uint8Array(d.n);
+  const order = [], groups = new Map();
+  for (let i = 0; i < d.n; i++) {
+    if (!d.ok[i]) continue;
+    const b = d.boot[i];
+    if (!groups.has(b)) { groups.set(b, []); order.push(b); }
+    groups.get(b).push(i);
+  }
+  let prevEnd = null;
+  for (const b of order) {
+    const idx = groups.get(b), A = anchors.get(b) || [];
+    let j = 0;
+    for (const i of idx) {
+      if (!A.length) break;
+      const up = d.up[i];
+      if (A.length >= 2) {
+        while (j < A.length - 2 && up > A[j + 1][0]) j++;
+        const [u1, t1] = A[j], [u2, t2] = A[j + 1];
+        if (up >= u1 && up <= u2 && u2 > u1) { d.time[i] = t1 + (up - u1) * (t2 - t1) / (u2 - u1); d.q[i] = 1; continue; }
+      }
+      let best = A[0];
+      for (const a of A) if (Math.abs(a[0] - up) < Math.abs(best[0] - up)) best = a;
+      d.time[i] = best[1] + (up - best[0]); d.q[i] = 2;
+    }
+    let any = false;
+    for (const i of idx) if (d.time[i] === d.time[i]) { any = true; break; }
+    if (!any && prevEnd !== null) {
+      const first = d.up[idx[0]];
+      for (const i of idx) { d.time[i] = prevEnd + (d.up[i] - first); d.q[i] = 3; }
+    }
+    let mx = -Infinity;
+    for (const i of idx) if (d.time[i] === d.time[i] && d.time[i] > mx) mx = d.time[i];
+    if (mx > -Infinity) prevEnd = mx;
+  }
+  return d;
+}
+// Time-sorted columns that the charts and statistics use.
+function buildDataset(d) {
+  const idx = [];
+  for (let i = 0; i < d.n; i++) if (d.ok[i] && d.time[i] === d.time[i]) idx.push(i);
+  idx.sort((a, b) => d.time[a] - d.time[b]);
+  const m = idx.length;
+  const D = { n: m, t: new Float64Array(m), out: new Float32Array(m), ind: new Float32Array(m), rh: new Float32Array(m),
+              pres: new Float32Array(m), boot: new Uint16Array(m), q: new Uint8Array(m), flags: new Uint8Array(m),
+              restarts: [], bad: d.bad, unplaced: 0, interval: 300, gap: 900 };
+  for (let k = 0; k < m; k++) {
+    const i = idx[k];
+    D.t[k] = d.time[i]; D.out[k] = d.out[i]; D.ind[k] = d.ind[i]; D.rh[k] = d.rh[i]; D.pres[k] = d.pres[i];
+    D.boot[k] = d.boot[i]; D.q[k] = d.q[i]; D.flags[k] = d.flags[i];
+    if (k > 0 && D.boot[k] !== D.boot[k - 1]) D.restarts.push(D.t[k]);
+  }
+  D.unplaced = d.n - d.bad - m;
+  const dts = [];
+  for (let k = 1; k < m && dts.length < 3000; k++) if (D.boot[k] === D.boot[k - 1]) { const x = D.t[k] - D.t[k - 1]; if (x > 0) dts.push(x); }
+  if (dts.length) { dts.sort((a, b) => a - b); D.interval = dts[dts.length >> 1]; }
+  D.gap = D.interval * 3.5;
+  return D;
+}
+
+// ====================================================================
+// Local storage (IndexedDB) - a byte-for-byte mirror of the logger's files
+// ====================================================================
+let dbp = null;
+function idb() {
+  if (!dbp) dbp = new Promise((res, rej) => {
+    const r = indexedDB.open('templogger', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  return dbp;
+}
+async function idbGet(k) { const db = await idb(); return new Promise((res, rej) => { const r = db.transaction('kv').objectStore('kv').get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+async function idbSet(k, v) { const db = await idb(); return new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); }); }
+const store = { log: new Uint8Array(0), anchors: new Uint8Array(0), demo: false };
+async function loadStore() {
+  try { store.log = (await idbGet('log')) || new Uint8Array(0); store.anchors = (await idbGet('anchors')) || new Uint8Array(0); } catch (e) { setMsg('Local storage unavailable: ' + e.message, true); }
+}
+async function saveStore() { if (store.demo) return; await idbSet('log', store.log); await idbSet('anchors', store.anchors); }
+const concat = (a, b) => { const o = new Uint8Array(a.length + b.length); o.set(a, 0); o.set(b, a.length); return o; };
+
+// ====================================================================
+// Bluetooth link to the Pico
+// ====================================================================
+function parseInfo(m) {
+  const dv = new DataView(m.buffer, m.byteOffset + 1, m.length - 1);
+  return { ver: dv.getUint8(0), recSize: dv.getUint8(1), interval: dv.getUint16(2, true), boot: dv.getUint16(4, true),
+           uptime: dv.getUint32(6, true), recCount: dv.getUint32(10, true), syncCount: dv.getUint32(14, true), state: dv.getUint8(18) };
+}
+class Link {
+  constructor() { this.inbox = []; this.waiters = []; this.dev = null; this.ctrl = null; this.chain = Promise.resolve(); this.clock = null; this.anyDevice = false; this.onLive = null; this.onLost = null; }
+  get connected() { return !!(this.dev && this.dev.gatt && this.dev.gatt.connected && this.ctrl); }
+  async connect() {
+    if (!navigator.bluetooth) throw new Error('Web Bluetooth is not available in this browser.');
+    if (!this.dev) {
+      const opts = this.anyDevice ? { acceptAllDevices: true, optionalServices: [UUID.svc] }
+                                  : { filters: [{ namePrefix: 'TempLogger' }], optionalServices: [UUID.svc] };
+      this.dev = await navigator.bluetooth.requestDevice(opts);
+      this.dev.addEventListener('gattserverdisconnected', () => this._lost());
+    }
+    try {
+      const server = await this.dev.gatt.connect();
+      const svc = await server.getPrimaryService(UUID.svc);
+      this.ctrl = await svc.getCharacteristic(UUID.ctrl);
+      this.data = await svc.getCharacteristic(UUID.data);
+      this.live = await svc.getCharacteristic(UUID.live);
+      this.data.addEventListener('characteristicvaluechanged', (e) => this._onData(e));
+      this.live.addEventListener('characteristicvaluechanged', (e) => this._onLive(e));
+      await this.data.startNotifications();
+      await this.live.startNotifications();
+    } catch (e) { this.dev = null; this.ctrl = null; throw e; }
+  }
+  disconnect() { if (this.dev && this.dev.gatt.connected) this.dev.gatt.disconnect(); this._lost(); }
+  _lost() {
+    const was = this.ctrl !== null; this.ctrl = null; this.clock = null;
+    for (const w of this.waiters) { clearTimeout(w.t); w.reject(new Error('Disconnected from the logger')); }
+    this.waiters = []; this.inbox = [];
+    if (was && this.onLost) this.onLost();
+  }
+  _bytes(ev) { const v = ev.target.value; return new Uint8Array(v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength)); }
+  _onLive(ev) { const b = this._bytes(ev); if (b.length >= REC && this.onLive) this.onLive(parseRecord(b, 0), this.clock); }
+  _onData(ev) {
+    const m = this._bytes(ev);
+    for (let i = 0; i < this.waiters.length; i++) {
+      const w = this.waiters[i];
+      if (w.pred(m)) { this.waiters.splice(i, 1); clearTimeout(w.t); w.resolve(m); return; }
+    }
+    this.inbox.push(m);
+  }
+  take(pred, ms = 8000) {
+    const i = this.inbox.findIndex(pred);
+    if (i >= 0) return Promise.resolve(this.inbox.splice(i, 1)[0]);
+    return new Promise((resolve, reject) => {
+      const w = { pred, resolve, reject };
+      w.t = setTimeout(() => { const k = this.waiters.indexOf(w); if (k >= 0) this.waiters.splice(k, 1); reject(new Error('The logger did not answer in time')); }, ms);
+      this.waiters.push(w);
+    });
+  }
+  async write(bytes) {
+    if (!this.ctrl) throw new Error('Not connected');
+    const f = this.ctrl.writeValueWithResponse || this.ctrl.writeValue;
+    await f.call(this.ctrl, bytes);
+  }
+  run(fn) { const p = this.chain.then(fn); this.chain = p.catch(() => {}); return p; }
+  cmd(code, extra) { const b = new Uint8Array(1 + (extra ? extra.length : 0)); b[0] = code; if (extra) b.set(extra, 1); return b; }
+  u32(v) { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, v >>> 0, true); return b; }
+
+  setTime() {
+    return this.run(async () => {
+      this.inbox.length = 0;
+      const t = Math.floor(Date.now() / 1000);
+      await this.write(this.cmd(C_SET_TIME, this.u32(t)));
+      const ack = await this.take((m) => m[0] === T_ACK && m[1] === C_SET_TIME);
+      const info = parseInfo(await this.take((m) => m[0] === T_INFO));
+      this.clock = { boot: info.boot, up: info.uptime, t };
+      return { status: ack[2], info };
+    });
+  }
+  info() {
+    return this.run(async () => {
+      this.inbox.length = 0;
+      await this.write(this.cmd(C_INFO));
+      return parseInfo(await this.take((m) => m[0] === T_INFO));
+    });
+  }
+  readStream(code, start, kind, recSize, count, onProgress) {
+    return this.run(async () => {
+      this.inbox.length = 0;
+      const extra = new Uint8Array(count ? 8 : 4);
+      new DataView(extra.buffer).setUint32(0, start, true);
+      if (count) new DataView(extra.buffer).setUint32(4, count, true);
+      await this.write(this.cmd(code, extra));
+      const chunks = []; let got = 0;
+      for (;;) {
+        const m = await this.take((x) => x[0] === kind || (x[0] === T_END && x[1] === kind), 10000);
+        if (m[0] === T_END) {
+          const dv = new DataView(m.buffer, m.byteOffset, m.length);
+          const sent = dv.getUint32(2, true), total = dv.getUint32(6, true);
+          if (got !== sent * recSize) throw new Error('Incomplete transfer (' + got / recSize + ' of ' + sent + ' records). Try again.');
+          let out = new Uint8Array(got), o = 0;
+          for (const c of chunks) { out.set(c, o); o += c.length; }
+          return { bytes: out, total };
+        }
+        const c = m.subarray(1); chunks.push(c); got += c.length;
+        if (onProgress) onProgress(got / recSize);
+      }
+    });
+  }
+  setInterval(sec) {
+    return this.run(async () => {
+      this.inbox.length = 0;
+      const b = new Uint8Array(2); new DataView(b.buffer).setUint16(0, sec, true);
+      await this.write(this.cmd(C_SET_INTERVAL, b));
+      return (await this.take((m) => m[0] === T_ACK && m[1] === C_SET_INTERVAL))[2];
+    });
+  }
+  sample() {
+    return this.run(async () => {
+      this.inbox.length = 0;
+      await this.write(this.cmd(C_SAMPLE));
+      return (await this.take((m) => m[0] === T_ACK && m[1] === C_SAMPLE, 12000))[2];
+    });
+  }
+  erase() {
+    return this.run(async () => {
+      this.inbox.length = 0;
+      await this.write(this.cmd(C_ERASE, new TextEncoder().encode('ERASE-LOG')));
+      return (await this.take((m) => m[0] === T_ACK && m[1] === C_ERASE))[2];
+    });
+  }
+}
+const link = new Link();
+
+// ====================================================================
+// Demo data (also exercises the real decode path)
+// ====================================================================
+function makeDemo() {
+  const step = 300, now = Math.floor(Date.now() / 1000), days = 60, total = days * 288;
+  const start = now - total * step, cutAt = Math.floor(total * 0.64), cutLen = 130;
+  let seed = 12345; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  const recs = [], anchors = [];
+  let ti = 19.5, heat = false, pres = 1012, boot = 1, upBase = 0;
+  const failFrom = Math.floor(total * 0.34), failTo = failFrom + 2.5 * 288;
+  for (let k = 0; k < total; k++) {
+    if (k === cutAt) { boot = 2; upBase = (cutAt + cutLen) * step; ti = Math.max(ti - 3, 12); }
+    if (k >= cutAt && k < cutAt + cutLen) continue;
+    const t = start + k * step;
+    const to = -5 + 5 * Math.sin(2 * Math.PI * ((t % 86400) / 86400 - 0.35)) + 4 * Math.sin(k / 900) + (rnd() - 0.5) * 0.4;
+    const off = k >= failFrom && k < failTo;
+    if (!off) { if (ti < 19.5) heat = true; else if (ti > 20.5) heat = false; } else heat = false;
+    ti += -(ti - to) * 0.004 + (heat ? 0.17 : 0) + (rnd() - 0.5) * 0.03;
+    pres = Math.min(1040, Math.max(985, pres + (rnd() - 0.5) * 0.9));
+    const rh = Math.min(70, Math.max(15, 38 - (ti - 20) * 2.2 + (rnd() - 0.5) * 2 + (to < -6 ? -4 : 0)));
+    const missing = rnd() < 0.003;
+    const up = k * step - upBase + 1;
+    recs.push(packRecord(up, boot, missing ? T_MISSING : Math.round(to * 100), Math.round(ti * 100), Math.round(rh * 100), Math.round(pres * 10), missing ? 1 : 0));
+  }
+  const lastUp = (total - 1) * step - upBase + 1;
+  const apack = (b, up, unix) => { const x = new Uint8Array(ANC), dv = new DataView(x.buffer); dv.setUint16(0, b, true); dv.setUint32(2, up, true); dv.setUint32(6, unix, true); return x; };
+  anchors.push(apack(1, 1, start + 1), apack(1, Math.floor(cutAt * 0.55) * step, start + Math.floor(cutAt * 0.55) * step + 4), apack(2, lastUp, now));
+  const log = new Uint8Array(recs.length * REC); recs.forEach((r, i) => log.set(r, i * REC));
+  const anc = new Uint8Array(anchors.length * ANC); anchors.forEach((a, i) => anc.set(a, i * ANC));
+  return { log, anchors: anc };
+}
+
+// ====================================================================
+// Model: dataset, view, settings
+// ====================================================================
+let D = null;
+const view = { t0: 0, t1: 1 };
+let activeRange = '604800';
+let hoverI = -1;
+const settings = { set: 20, tol: 1 };
+try { const s = JSON.parse(localStorage.getItem('tl-settings') || '{}'); if (isFinite(s.set)) settings.set = s.set; if (isFinite(s.tol)) settings.tol = s.tol; } catch (e) {}
+
+function rebuild(resetView) {
+  const d = decodeLog(store.log);
+  resolveTimes(d, decodeAnchors(store.anchors));
+  D = buildDataset(d);
+  if (resetView || !(view.t1 > view.t0)) setRange(activeRange || '604800');
+  hoverI = -1; hideTip();
+  refreshAll();
+}
+function fullSpan() { return D && D.n ? [D.t[0], D.t[D.n - 1]] : [0, 1]; }
+function setRange(r) {
+  activeRange = r;
+  const [a, b] = fullSpan();
+  if (!D || !D.n) { view.t0 = 0; view.t1 = 1; }
+  else if (r === 'all' || +r >= (b - a) * 1.05) { const p = Math.max((b - a) * 0.01, 300); view.t0 = a - p; view.t1 = b + p; }
+  else { const span = +r, p = span * 0.01; view.t1 = b + p; view.t0 = view.t1 - span; }
+  document.querySelectorAll('[data-range]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.range === r)));
+}
+function clampView() {
+  const [a, b] = fullSpan();
+  let span = view.t1 - view.t0;
+  const minS = 600, maxS = Math.max((b - a) * 1.2, 3600);
+  span = Math.min(Math.max(span, minS), maxS);
+  let t0 = view.t0, t1 = t0 + span;
+  if (t1 < a + span * 0.1) { t1 = a + span * 0.1; t0 = t1 - span; }
+  if (t0 > b - span * 0.1) { t0 = b - span * 0.1; t1 = t0 + span; }
+  view.t0 = t0; view.t1 = t1;
+}
+
+// ====================================================================
+// Charts (canvas)
+// ====================================================================
+function theme() {
+  const cs = getComputedStyle(document.documentElement), g = (n) => cs.getPropertyValue(n).trim();
+  return { surface: g('--surface'), ink2: g('--ink2'), muted: g('--muted'), grid: g('--grid'), axis: g('--axis'),
+           in: g('--s-in'), out: g('--s-out'), hum: g('--s-hum'), pres: g('--s-pres') };
+}
+function niceTicks(lo, hi, n) {
+  const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / mag;
+  const step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * mag, out = [];
+  for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+  return { ticks: out, step };
+}
+const TSTEPS = [60, 300, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400, 172800, 604800, 1209600, 2592000];
+function timeTicks(t0, t1, maxN) {
+  const span = t1 - t0, step = TSTEPS.find((s) => span / s <= maxN) || TSTEPS[TSTEPS.length - 1];
+  const off = -new Date(t0 * 1000).getTimezoneOffset() * 60, out = [];
+  for (let t = Math.ceil((t0 + off) / step) * step - off; t <= t1; t += step) {
+    const d = new Date(t * 1000);
+    out.push({ t, label: (step >= 86400 || (d.getHours() === 0 && d.getMinutes() === 0)) ? fmtDM(t) : fmtHM(t) });
+  }
+  return out;
+}
+const PL = 44, PR = 10, PT = 8, PB = 22;
+class Chart {
+  constructor(canvas, cfg) { this.c = canvas; this.cfg = cfg; this.ctx = canvas.getContext('2d'); this.resize(); }
+  resize() {
+    const r = this.c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    this.w = r.width; this.h = r.height; this.dpr = dpr;
+    this.c.width = Math.max(1, Math.round(r.width * dpr)); this.c.height = Math.max(1, Math.round(r.height * dpr));
+  }
+  xOf(t) { return PL + (t - view.t0) / (view.t1 - view.t0) * (this.w - PL - PR); }
+  draw(th) {
+    const { ctx, w: W, h: H, cfg } = this, pw = W - PL - PR, ph = H - PT - PB;
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    ctx.font = '11px system-ui, -apple-system, "Segoe UI", sans-serif';
+    if (pw < 20) return;
+    if (!D || !D.n) { ctx.fillStyle = th.ink2; ctx.textAlign = 'center'; ctx.fillText('No data yet. Connect to the logger to download readings.', W / 2, H / 2); return; }
+    const t0 = view.t0, t1 = view.t1, span = t1 - t0;
+    let i0 = lowerBound(D.t, t0) - 1; if (i0 < 0) i0 = 0;
+    let i1 = upperBound(D.t, t1); if (i1 > D.n - 1) i1 = D.n - 1;
+    let lo = Infinity, hi = -Infinity;
+    for (const s of cfg.series) { const a = D[s.key]; for (let i = i0; i <= i1; i++) { const v = a[i]; if (v === v) { if (v < lo) lo = v; if (v > hi) hi = v; } } }
+    const band = cfg.band ? cfg.band() : null;
+    if (band) { lo = Math.min(lo, band.lo); hi = Math.max(hi, band.hi); }
+    if (lo === Infinity) { lo = 0; hi = cfg.minSpan; }
+    if (hi - lo < cfg.minSpan) { const m = (hi + lo) / 2; lo = m - cfg.minSpan / 2; hi = m + cfg.minSpan / 2; }
+    const pv = (hi - lo) * 0.08; lo -= pv; hi += pv;
+    const yOf = (v) => PT + ph - (v - lo) / (hi - lo) * ph, xOf = (t) => PL + (t - t0) / span * pw;
+    // grid + y labels
+    const { ticks, step } = niceTicks(lo, hi, Math.max(2, Math.floor(ph / 30)));
+    const dec = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+    ctx.lineWidth = 1; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+    for (const v of ticks) { const y = Math.round(yOf(v)) + 0.5; ctx.strokeStyle = th.grid; ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(W - PR, y); ctx.stroke(); ctx.fillStyle = th.muted; ctx.fillText(v.toFixed(dec), PL - 6, y); }
+    // x labels
+    ctx.textBaseline = 'top'; ctx.textAlign = 'center';
+    for (const k of timeTicks(t0, t1, Math.max(2, Math.floor(pw / 62)))) {
+      const x = Math.round(xOf(k.t)) + 0.5; ctx.strokeStyle = th.grid; ctx.beginPath(); ctx.moveTo(x, PT); ctx.lineTo(x, PT + ph); ctx.stroke();
+      const lw = ctx.measureText(k.label).width / 2, lx = Math.min(W - 2 - lw, Math.max(2 + lw, x)); ctx.fillStyle = th.muted; ctx.fillText(k.label, lx, PT + ph + 6);
+    }
+    ctx.strokeStyle = th.axis; ctx.beginPath(); ctx.moveTo(PL, PT + ph + 0.5); ctx.lineTo(W - PR, PT + ph + 0.5); ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.rect(PL, PT, pw, ph); ctx.clip();
+    if (band) { // target band: a neutral wash, not a series
+      const ya = yOf(band.hi), yb = yOf(band.lo);
+      ctx.globalAlpha = 0.14; ctx.fillStyle = th.muted; ctx.fillRect(PL, ya, pw, yb - ya); ctx.globalAlpha = 1;
+    }
+    for (const rt of D.restarts) { if (rt < t0 || rt > t1) continue; const x = Math.round(xOf(rt)) + 0.5; ctx.strokeStyle = th.axis; ctx.beginPath(); ctx.moveTo(x, PT); ctx.lineTo(x, PT + ph); ctx.stroke(); }
+    for (const s of cfg.series) this.drawSeries(ctx, D[s.key], th[s.color], i0, i1, pw, xOf, yOf, t0, span, th);
+    ctx.restore();
+    for (const rt of D.restarts) { // restart markers sit on the axis, outside the clip
+      if (rt < t0 || rt > t1) continue; const x = xOf(rt);
+      ctx.fillStyle = th.muted; ctx.beginPath(); ctx.moveTo(x - 4, PT + ph); ctx.lineTo(x + 4, PT + ph); ctx.lineTo(x, PT + ph - 7); ctx.closePath(); ctx.fill();
+    }
+    if (hoverI >= 0 && hoverI < D.n) {
+      const x = xOf(D.t[hoverI]);
+      if (x >= PL && x <= W - PR) {
+        ctx.strokeStyle = th.ink2; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(Math.round(x) + 0.5, PT); ctx.lineTo(Math.round(x) + 0.5, PT + ph); ctx.stroke();
+        for (const s of cfg.series) {
+          const v = D[s.key][hoverI]; if (v !== v) continue; const y = yOf(v);
+          ctx.fillStyle = th.surface; ctx.beginPath(); ctx.arc(x, y, 6, 0, 6.2832); ctx.fill();
+          ctx.fillStyle = th[s.color]; ctx.beginPath(); ctx.arc(x, y, 4, 0, 6.2832); ctx.fill();
+        }
+      }
+    }
+  }
+  drawSeries(ctx, arr, color, i0, i1, pw, xOf, yOf, t0, span, th) {
+    ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.strokeStyle = color; ctx.fillStyle = color;
+    const nvis = i1 - i0 + 1;
+    if (nvis > pw * 1.5) { // dense: per-pixel envelope + mean line
+      const B = Math.max(1, Math.floor(pw)), mn = new Float32Array(B).fill(Infinity), mx = new Float32Array(B).fill(-Infinity), sm = new Float32Array(B), ct = new Uint16Array(B);
+      for (let i = i0; i <= i1; i++) { const v = arr[i]; if (v !== v) continue; const b = Math.floor((D.t[i] - t0) / span * B); if (b < 0 || b >= B) continue; if (v < mn[b]) mn[b] = v; if (v > mx[b]) mx[b] = v; sm[b] += v; ct[b]++; }
+      ctx.globalAlpha = 0.14;
+      for (let b = 0; b < B;) {
+        if (!ct[b]) { b++; continue; }
+        let e = b; while (e + 1 < B && ct[e + 1]) e++;
+        ctx.beginPath(); ctx.moveTo(PL + b, yOf(mx[b]));
+        for (let k = b; k <= e; k++) ctx.lineTo(PL + k + 1, yOf(mx[k]));
+        for (let k = e; k >= b; k--) ctx.lineTo(PL + k + 1, yOf(mn[k]));
+        ctx.closePath(); ctx.fill(); b = e + 1;
+      }
+      ctx.globalAlpha = 1; ctx.beginPath(); let pen = false;
+      for (let b = 0; b < B; b++) { if (!ct[b]) { pen = false; continue; } const x = PL + b + 0.5, y = yOf(sm[b] / ct[b]); if (pen) ctx.lineTo(x, y); else ctx.moveTo(x, y); pen = true; }
+      ctx.stroke();
+      return;
+    }
+    ctx.beginPath(); let pen = false, run = 0, prevT = 0, prevB = 0, lastX = 0, lastY = 0; const lone = [];
+    for (let i = i0; i <= i1; i++) {
+      const v = arr[i];
+      if (v !== v) { if (pen && run === 1) lone.push([lastX, lastY]); pen = false; run = 0; continue; }
+      const x = xOf(D.t[i]), y = yOf(v);
+      if (pen && (D.t[i] - prevT > D.gap || D.boot[i] !== prevB)) { if (run === 1) lone.push([lastX, lastY]); pen = false; run = 0; }
+      if (pen) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+      pen = true; run++; prevT = D.t[i]; prevB = D.boot[i]; lastX = x; lastY = y;
+    }
+    if (pen && run === 1) lone.push([lastX, lastY]);
+    ctx.stroke();
+    for (const [x, y] of lone) { ctx.beginPath(); ctx.arc(x, y, 2.5, 0, 6.2832); ctx.fill(); }
+    // end dot on the newest reading
+    if (D.t[D.n - 1] <= view.t1 && D.t[D.n - 1] >= view.t0 && i1 === D.n - 1 && arr[i1] === arr[i1]) {
+      const x = xOf(D.t[i1]), y = yOf(arr[i1]);
+      ctx.fillStyle = th.surface; ctx.beginPath(); ctx.arc(x, y, 6, 0, 6.2832); ctx.fill();
+      ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 4, 0, 6.2832); ctx.fill();
+    }
+  }
+}
+let charts = [];
+function initCharts() {
+  charts = [
+    new Chart($('#cTemp'), { series: [{ key: 'ind', color: 'in' }, { key: 'out', color: 'out' }], minSpan: 3, band: () => ({ lo: settings.set - settings.tol, hi: settings.set + settings.tol }) }),
+    new Chart($('#cHum'), { series: [{ key: 'rh', color: 'hum' }], minSpan: 10 }),
+    new Chart($('#cPres'), { series: [{ key: 'pres', color: 'pres' }], minSpan: 6 }),
+  ];
+}
+let rafId = 0;
+function scheduleDraw() { if (!rafId) rafId = requestAnimationFrame(() => { rafId = 0; const th = theme(); for (const c of charts) c.draw(th); }); }
+function resizeCharts() { for (const c of charts) c.resize(); scheduleDraw(); }
+
+// ---- legend
+function buildLegend() {
+  const L = $('#legend'); L.textContent = '';
+  const add = (cls, style, text) => { const s = document.createElement('span'); const k = document.createElement('i'); k.className = cls; if (style) k.style.borderColor = style; s.append(k, document.createTextNode(text)); L.append(s); };
+  add('key', 'var(--s-in)', 'Indoor'); add('key', 'var(--s-out)', 'Outdoor');
+  add('band-key', '', 'Target ' + settings.set + ' ± ' + settings.tol + ' °C');
+  if (D && D.restarts.length) add('tri', '', 'Logger restarted (power loss)');
+}
+
+// ---- hover / tooltip
+function hideTip() { const t = $('#tip'); if (t) t.hidden = true; }
+function showTip(clientX) {
+  const tip = $('#tip'), box = $('#charts').getBoundingClientRect();
+  tip.textContent = '';
+  const th = document.createElement('div'); th.className = 'th'; th.textContent = fmtFull(D.t[hoverI]); tip.append(th);
+  const row = (color, val, unit, label) => {
+    const r = document.createElement('div'); r.className = 'r';
+    const k = document.createElement('i'); k.className = 'key'; k.style.borderColor = color;
+    const b = document.createElement('b'); b.textContent = val === val ? val.toFixed(1) + ' ' + unit : '–';
+    const e = document.createElement('em'); e.textContent = label; r.append(k, b, e); tip.append(r);
+  };
+  row('var(--s-in)', D.ind[hoverI], '°C', 'Indoor'); row('var(--s-out)', D.out[hoverI], '°C', 'Outdoor');
+  row('var(--s-hum)', D.rh[hoverI], '%', 'Humidity'); row('var(--s-pres)', D.pres[hoverI], 'hPa', 'Pressure');
+  if (D.q[hoverI] === 3) { const n = document.createElement('div'); n.className = 'note'; n.textContent = 'Time is approximate (logger was not synced during this period).'; tip.append(n); }
+  tip.hidden = false;
+  const x = clientX - box.left, w = tip.offsetWidth;
+  tip.style.left = Math.max(0, Math.min(box.width - w, x + 14 > box.width - w ? x - w - 14 : x + 14)) + 'px';
+  tip.style.top = '28px';
+}
+function hoverAt(clientX) {
+  if (!D || !D.n) return;
+  const r = $('#cTemp').getBoundingClientRect(), pw = r.width - PL - PR;
+  const x = clientX - r.left;
+  if (x < PL - 4 || x > r.width - PR + 4) { hoverI = -1; hideTip(); scheduleDraw(); return; }
+  const t = view.t0 + (x - PL) / pw * (view.t1 - view.t0);
+  let i = lowerBound(D.t, t); if (i >= D.n) i = D.n - 1;
+  if (i > 0 && Math.abs(D.t[i - 1] - t) < Math.abs(D.t[i] - t)) i--;
+  if (Math.abs(D.t[i] - t) / (view.t1 - view.t0) * pw > 36) { hoverI = -1; hideTip(); scheduleDraw(); return; }
+  hoverI = i; showTip(clientX); scheduleDraw();
+}
+function pointerSetup() {
+  const cont = $('#charts'), ptrs = new Map(); let pinch = null;
+  const pw = () => cont.getBoundingClientRect().width - PL - PR;
+  cont.addEventListener('pointerdown', (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    cont.setPointerCapture(e.pointerId);
+    ptrs.set(e.pointerId, { x: e.clientX, x0: e.clientX, moved: false });
+    if (ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()], cx = (a.x + b.x) / 2, r = cont.getBoundingClientRect();
+      pinch = { d: Math.max(20, Math.abs(a.x - b.x)), span: view.t1 - view.t0, tc: view.t0 + (cx - r.left - PL) / pw() * (view.t1 - view.t0) };
+      hoverI = -1; hideTip();
+    }
+  });
+  cont.addEventListener('pointermove', (e) => {
+    const p = ptrs.get(e.pointerId);
+    if (!p) { if (e.pointerType === 'mouse') hoverAt(e.clientX); return; }
+    const dx = e.clientX - p.x; p.x = e.clientX;
+    if (Math.abs(e.clientX - p.x0) > 4) p.moved = true;
+    if (ptrs.size === 1 && p.moved) {
+      const span = view.t1 - view.t0, dt = -dx / pw() * span; view.t0 += dt; view.t1 += dt; activeRange = ''; clampView(); hoverI = -1; hideTip(); updateRangeButtons(); refreshAll(true);
+    } else if (ptrs.size === 2 && pinch) {
+      const [a, b] = [...ptrs.values()], cx = (a.x + b.x) / 2, r = cont.getBoundingClientRect();
+      const span = pinch.span * pinch.d / Math.max(20, Math.abs(a.x - b.x));
+      view.t0 = pinch.tc - (cx - r.left - PL) / pw() * span; view.t1 = view.t0 + span; activeRange = ''; clampView(); updateRangeButtons(); refreshAll(true);
+    }
+  });
+  const end = (e) => {
+    const p = ptrs.get(e.pointerId); if (!p) return;
+    const wasOne = ptrs.size === 1;
+    ptrs.delete(e.pointerId);
+    if (ptrs.size < 2) pinch = null;
+    if (e.type === 'pointerup' && wasOne && !p.moved && e.pointerType !== 'mouse') {
+      const before = hoverI; hoverAt(e.clientX); if (before >= 0 && before === hoverI) { hoverI = -1; hideTip(); scheduleDraw(); }
+    }
+  };
+  cont.addEventListener('pointerup', end); cont.addEventListener('pointercancel', end);
+  cont.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse' && !ptrs.size) { hoverI = -1; hideTip(); scheduleDraw(); } });
+  cont.addEventListener('wheel', (e) => {
+    if (!D || !D.n) return; e.preventDefault();
+    const r = cont.getBoundingClientRect(), span = view.t1 - view.t0;
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) { const dt = e.deltaX / pw() * span; view.t0 += dt; view.t1 += dt; }
+    else { const f = Math.exp(e.deltaY * 0.0015), tc = view.t0 + (e.clientX - r.left - PL) / pw() * span, ns = span * f; view.t0 = tc - (e.clientX - r.left - PL) / pw() * ns; view.t1 = view.t0 + ns; }
+    activeRange = ''; clampView(); hoverI = -1; hideTip(); updateRangeButtons(); refreshAll(true);
+  }, { passive: false });
+  cont.addEventListener('keydown', (e) => {
+    if (!D || !D.n || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+    e.preventDefault();
+    if (hoverI < 0) hoverI = Math.max(0, Math.min(D.n - 1, lowerBound(D.t, (view.t0 + view.t1) / 2)));
+    else hoverI = Math.max(0, Math.min(D.n - 1, hoverI + (e.key === 'ArrowRight' ? 1 : -1)));
+    const r = $('#cTemp').getBoundingClientRect(); showTip(r.left + charts[0].xOf(D.t[hoverI])); scheduleDraw();
+  });
+}
+function updateRangeButtons() { document.querySelectorAll('[data-range]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.range === activeRange))); }
+
+// ====================================================================
+// Statistics, heating check, table view
+// ====================================================================
+function visibleRange() {
+  if (!D || !D.n) return [0, -1];
+  return [lowerBound(D.t, view.t0), upperBound(D.t, view.t1) - 1];
+}
+function renderStats() {
+  const dl = $('#stats'), verdict = $('#verdict'); dl.textContent = '';
+  const [i0, i1] = visibleRange();
+  if (!D || !D.n || i1 < i0) { verdict.textContent = 'No data in this range'; return; }
+  const lo = settings.set - settings.tol, hi = settings.set + settings.tol;
+  let n = 0, inB = 0, below = 0, above = 0, run = 0, longest = 0, runStart = 0, lastT = 0, lastBoot = 0;
+  const acc = (k) => ({ min: Infinity, max: -Infinity, sum: 0, n: 0, k });
+  const aIn = acc('ind'), aOut = acc('out'), restarts = D.restarts.filter((t) => t >= view.t0 && t <= view.t1).length;
+  for (let i = i0; i <= i1; i++) {
+    for (const a of [aIn, aOut]) { const v = D[a.k][i]; if (v === v) { if (v < a.min) a.min = v; if (v > a.max) a.max = v; a.sum += v; a.n++; } }
+    const v = D.ind[i];
+    if (v !== v) { run = 0; continue; }
+    n++;
+    if (v < lo) { below++; if (run && D.t[i] - lastT <= D.gap && D.boot[i] === lastBoot) { run++; } else { run = 1; runStart = D.t[i]; } longest = Math.max(longest, D.t[i] - runStart + D.interval); }
+    else { run = 0; if (v > hi) above++; else inB++; }
+    lastT = D.t[i]; lastBoot = D.boot[i];
+  }
+  const pct = (x) => (n ? (100 * x / n).toFixed(1) : '0') + ' %';
+  if (!n) { verdict.textContent = 'No indoor readings in this range'; return; }
+  const okPct = 100 * inB / n;
+  verdict.textContent = (okPct >= 95 ? '✓ ' : okPct >= 80 ? '▲ ' : '✕ ') +
+    'Indoor stayed within ' + settings.set + ' ± ' + settings.tol + ' °C for ' + okPct.toFixed(1) + ' % of the time';
+  const row = (k, v) => { const a = document.createElement('dt'), b = document.createElement('dd'); a.textContent = k; b.textContent = v; dl.append(a, b); };
+  row('Within target', pct(inB));
+  row('Below target', pct(below) + (below ? ' (longest stretch ' + fmtDur(longest) + ')' : ''));
+  row('Above target', pct(above));
+  const mm = (a) => a.n ? a.min.toFixed(1) + ' / ' + (a.sum / a.n).toFixed(1) + ' / ' + a.max.toFixed(1) + ' °C' : '–';
+  row('Indoor min / avg / max', mm(aIn)); row('Outdoor min / avg / max', mm(aOut));
+  row('Readings in view', String(i1 - i0 + 1));
+  if (restarts) row('Logger restarts in view', String(restarts));
+  if (D.unplaced || D.bad) row('Skipped records', (D.unplaced ? D.unplaced + ' without a time (sync the clock) ' : '') + (D.bad ? D.bad + ' corrupted' : ''));
+}
+function renderTable() {
+  const tbl = $('#tbl'); tbl.textContent = '';
+  const [i0, i1] = visibleRange();
+  if (!D || !D.n || i1 < i0) { $('#tableTitle').textContent = 'Readings'; return; }
+  const span = view.t1 - view.t0, steps = [300, 900, 3600, 10800, 21600, 86400];
+  const bucket = Math.max(D.interval, steps.find((s) => span / s <= 150) || 86400);
+  $('#tableTitle').textContent = 'Readings, ' + (bucket >= 86400 ? 'daily' : bucket >= 3600 ? bucket / 3600 + ' h' : bucket / 60 + ' min') + ' averages';
+  const head = tbl.createTHead().insertRow();
+  ['Time', 'Indoor °C', 'Outdoor °C', 'Humidity %', 'Pressure hPa'].forEach((h) => { const th = document.createElement('th'); th.textContent = h; head.append(th); });
+  const body = tbl.createTBody();
+  let bi = Math.floor(D.t[i0] / bucket), s = [0, 0, 0, 0], c = [0, 0, 0, 0];
+  const flush = () => {
+    const r = body.insertRow(); r.insertCell().textContent = fmtDM(bi * bucket) + ' ' + (bucket < 86400 ? fmtHM(bi * bucket) : '');
+    for (let k = 0; k < 4; k++) r.insertCell().textContent = c[k] ? (s[k] / c[k]).toFixed(1) : '–';
+    s = [0, 0, 0, 0]; c = [0, 0, 0, 0];
+  };
+  for (let i = i0; i <= i1; i++) {
+    const b = Math.floor(D.t[i] / bucket); if (b !== bi) { flush(); bi = b; }
+    [D.ind[i], D.out[i], D.rh[i], D.pres[i]].forEach((v, k) => { if (v === v) { s[k] += v; c[k]++; } });
+  }
+  flush();
+}
+function updateTiles() {
+  if (!D || !D.n) return;
+  const i = D.n - 1;
+  $('#vIn').textContent = fmt1(D.ind[i]); $('#vOut').textContent = fmt1(D.out[i]); $('#vHum').textContent = fmt1(D.rh[i]); $('#vPres').textContent = fmt1(D.pres[i]);
+  const when = 'Logged ' + fmtFull(D.t[i]);
+  ['#uIn', '#uOut', '#uHum', '#uPres'].forEach((s) => { $(s).textContent = when; });
+}
+function showLive(rec, clock) {
+  if (!rec.ok) return;
+  let when = 'Live';
+  if (clock && clock.boot === rec.boot) when = 'Measured ' + fmtHM(clock.t + (rec.up - clock.up));
+  $('#vIn').textContent = fmt1(rec.ind); $('#vOut').textContent = fmt1(rec.out); $('#vHum').textContent = fmt1(rec.rh); $('#vPres').textContent = fmt1(rec.pres);
+  ['#uIn', '#uOut', '#uHum', '#uPres'].forEach((s) => { $(s).textContent = when; });
+}
+function refreshAll(light) {
+  scheduleDraw();
+  renderStats();
+  if (!$('#tableCard').hidden) renderTable();
+  if (!light) { updateTiles(); buildLegend(); }
+}
+
+// ====================================================================
+// Export
+// ====================================================================
+function exportCsv() {
+  if (!D || !D.n) { setMsg('Nothing to export yet.', true); return; }
+  const rows = ['time_utc,time_local,unix,boot_id,outdoor_C,indoor_C,humidity_pct,pressure_hPa,flags,time_quality'];
+  const q = ['', 'exact', 'anchor', 'approx'];
+  for (let i = 0; i < D.n; i++) {
+    const f = (v) => v === v ? v : '';
+    rows.push([isoUtc(D.t[i]), isoLocal(D.t[i]), Math.round(D.t[i]), D.boot[i], f(D.out[i]), f(D.ind[i]), f(D.rh[i]), f(D.pres[i]), D.flags[i], q[D.q[i]]].join(','));
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([rows.join('\n') + '\n'], { type: 'text/csv' }));
+  a.download = 'cottage-log-' + isoLocal(Date.now() / 1000).slice(0, 10) + '.csv';
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  setMsg('Exported ' + D.n + ' readings.');
+}
+
+// ====================================================================
+// UI wiring
+// ====================================================================
+let busy = false;
+function setBusy(b, label) {
+  busy = b; $('#charts').classList.toggle('busy', b);
+  ['btnConnect', 'btnDisc', 'btnSample', 'btnInt', 'btnErase', 'btnClear', 'btnDemo'].forEach((id) => { $('#' + id).disabled = b; });
+  if (!b) { $('#prog').hidden = true; }
+  if (label) setMsg(label);
+}
+function updateConn() {
+  const c = link.connected;
+  $('#dot').classList.toggle('on', c);
+  $('#status').textContent = c ? 'Connected to ' + (link.dev.name || 'logger') : 'Not connected';
+  $('#btnConnect').textContent = c ? 'Sync now' : 'Connect';
+  $('#btnDisc').hidden = !c;
+}
+function showBanner(text) { const b = $('#banner'); b.hidden = !text; b.textContent = text || ''; }
+function progress(done, total) { const p = $('#prog'); p.hidden = false; if (total) { p.max = total; p.value = done; } else p.removeAttribute('value'); }
+
+async function doSync() {
+  setBusy(true, 'Setting the logger clock...');
+  try {
+    const { info } = await link.setTime();
+    $('#inInt').value = info.interval;
+    $('#devInfo').textContent = 'Logger: ' + info.recCount + ' records, ' + info.syncCount + ' clock syncs, boot #' + info.boot + ', running ' + fmtDur(info.uptime) +
+      (info.state & 1 ? '. Log is full.' : '') + ((info.state >> 1) & 7 ? '. A sensor reported an error.' : '');
+    let localN = Math.floor(store.log.length / REC), reset = false;
+    if (localN > 0) { // is our copy still the same log? compare the newest record we hold
+      setMsg('Checking stored data...');
+      const probe = await link.readStream(C_READ_LOG, localN - 1, T_LOG, REC, 1);
+      const mine = store.log.subarray((localN - 1) * REC, localN * REC);
+      if (probe.bytes.length !== REC || probe.bytes.some((v, i) => v !== mine[i])) { store.log = new Uint8Array(0); localN = 0; reset = true; }
+    }
+    const need = info.recCount - localN;
+    if (need > 0) {
+      setMsg('Downloading ' + need + ' new readings...'); progress(0, need);
+      const r = await link.readStream(C_READ_LOG, localN, T_LOG, REC, 0, (n) => progress(n, need));
+      store.log = concat(store.log, r.bytes);
+    }
+    setMsg('Reading clock sync points...');
+    const an = await link.readStream(C_READ_SYNC, 0, T_SYNC, ANC, 0);
+    store.anchors = an.bytes;
+    store.demo = false; await saveStore();
+    rebuild(true);
+    try { await link.sample(); } catch (e) { /* live refresh is optional */ }
+    setMsg((reset ? 'The logger log was different from the stored copy, so it was downloaded again. ' : '') +
+      'Synced ' + new Date().toLocaleTimeString() + ': ' + Math.max(0, need) + ' new readings, ' + Math.floor(store.log.length / REC) + ' stored.');
+  } catch (e) { setMsg(e.message || String(e), true); }
+  finally { setBusy(false); updateConn(); }
+}
+
+function wire() {
+  $('#btnConnect').onclick = async () => {
+    setBusy(true, 'Connecting...');
+    try { if (!link.connected) { link.anyDevice = $('#chkAny').checked; await link.connect(); } updateConn(); }
+    catch (e) { setBusy(false); updateConn(); setMsg(e.name === 'NotFoundError' ? 'No device selected.' : (e.message || String(e)), e.name !== 'NotFoundError'); return; }
+    setBusy(false); await doSync();
+  };
+  $('#btnDisc').onclick = () => { link.disconnect(); updateConn(); setMsg('Disconnected.'); };
+  document.querySelectorAll('[data-range]').forEach((b) => { b.onclick = () => { setRange(b.dataset.range); hoverI = -1; hideTip(); refreshAll(); }; });
+  $('#btnTable').onclick = () => {
+    const on = $('#tableCard').hidden; $('#tableCard').hidden = !on; $('#chartCard').hidden = on; $('#btnTable').setAttribute('aria-pressed', String(on));
+    $('#btnTable').textContent = on ? 'Chart view' : 'Table view'; if (on) renderTable(); else resizeCharts();
+  };
+  $('#inSet').value = settings.set; $('#inTol').value = settings.tol;
+  const onSet = () => {
+    const s = parseFloat($('#inSet').value), t = parseFloat($('#inTol').value);
+    if (isFinite(s)) settings.set = s; if (isFinite(t) && t >= 0) settings.tol = t;
+    try { localStorage.setItem('tl-settings', JSON.stringify(settings)); } catch (e) {}
+    refreshAll();
+  };
+  $('#inSet').oninput = onSet; $('#inTol').oninput = onSet;
+  $('#btnSample').onclick = async () => {
+    if (!link.connected) { setMsg('Connect to the logger first.', true); return; }
+    setBusy(true, 'Measuring...'); try { await link.sample(); setMsg('Live values updated (this reading is not stored in the log).'); } catch (e) { setMsg(e.message, true); } finally { setBusy(false); }
+  };
+  $('#btnInt').onclick = async () => {
+    if (!link.connected) { setMsg('Connect to the logger first.', true); return; }
+    const v = parseInt($('#inInt').value, 10);
+    if (!(v >= 10 && v <= 3600)) { setMsg('Interval must be 10 to 3600 seconds.', true); return; }
+    setBusy(true, 'Setting interval...'); try { const s = await link.setInterval(v); setMsg(s === 0 ? 'Log interval set to ' + v + ' s.' : 'The logger refused that value.', s !== 0); } catch (e) { setMsg(e.message, true); } finally { setBusy(false); }
+  };
+  $('#btnCsv').onclick = exportCsv;
+  $('#btnDemo').onclick = () => { const d = makeDemo(); store.log = d.log; store.anchors = d.anchors; store.demo = true; showBanner('Showing demo data. Nothing is stored. Press "Clear data on this phone" or reload to leave demo mode.'); rebuild(true); setMsg('Demo data: 60 days with a heating failure and a power cut.'); };
+  $('#btnClear').onclick = async () => {
+    if (!confirm('Delete the readings stored on this phone? The logger keeps its own copy.')) return;
+    store.log = new Uint8Array(0); store.anchors = new Uint8Array(0); const wasDemo = store.demo; store.demo = false; showBanner('');
+    if (!wasDemo) await saveStore(); else { await loadStore(); }
+    rebuild(true); setMsg(wasDemo ? 'Demo data removed.' : 'Local data cleared.');
+  };
+  $('#btnErase').onclick = async () => {
+    if (!link.connected) { setMsg('Connect to the logger first.', true); return; }
+    if (!confirm('Erase ALL readings stored on the logger? This cannot be undone. Download them first (Sync now).')) return;
+    setBusy(true, 'Erasing...');
+    try { const s = await link.erase(); if (s === 0) { store.log = new Uint8Array(0); store.anchors = new Uint8Array(0); await saveStore(); rebuild(true); setMsg('The logger log was erased.'); } else setMsg('The logger refused to erase.', true); }
+    catch (e) { setMsg(e.message, true); } finally { setBusy(false); }
+  };
+  link.onLive = showLive;
+  link.onLost = () => { updateConn(); setMsg('Connection to the logger was lost.', true); };
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', scheduleDraw);
+  new ResizeObserver(() => resizeCharts()).observe($('#charts'));
+  window.addEventListener('beforeunload', () => { if (link.connected) link.disconnect(); });
+}
+
+async function init() {
+  if (!navigator.bluetooth) showBanner('This browser has no Web Bluetooth. Use Chrome on Android or a computer. On iPhone, use the Bluefy browser.');
+  initCharts(); pointerSetup(); wire(); updateConn();
+  await loadStore();
+  rebuild(true);
+  if (!store.log.length) setMsg('No data yet. Press Connect to download readings from the logger.');
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) navigator.serviceWorker.register('sw.js').catch(() => {});
+  window.__tl = { makeDemo, packRecord, parseRecord, decodeLog, decodeAnchors, resolveTimes, buildDataset, store, link, get D() { return D; }, rebuild };
+}
+init();
+})();
+</script>
+</body>
+</html>
